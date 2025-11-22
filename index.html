@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Detalhado - Testes de Velocidade</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Dashboard Detalhado de Testes de Velocidade</h1>
+            <div class="header-info">
+                <span id="total-tests">Carregando dados do speedtests.json...</span>
+                <span id="date-range">-</span>
+            </div>
+            <div id="loading-indicator" style="margin-top: 15px;">
+                <div style="display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span style="margin-left: 10px;">Carregando relatório...</span>
+            </div>
+            <div class="header-actions">
+                <button id="export-btn" class="btn-primary">📥 Exportar Relatório</button>
+                <button id="refresh-btn" class="btn-secondary">🔄 Atualizar</button>
+            </div>
+        </header>
+
+        <!-- Cards de Estatísticas Principais -->
+        <div class="section-title">📈 Estatísticas Principais</div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">⬇️</div>
+                <div class="stat-content">
+                    <h3>Download</h3>
+                    <div class="stat-value" id="download-avg">-</div>
+                    <div class="stat-details">
+                        <span>Máx: <strong id="download-max">-</strong></span>
+                        <span>Mín: <strong id="download-min">-</strong></span>
+                        <span>Mediana: <strong id="download-median">-</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">⬆️</div>
+                <div class="stat-content">
+                    <h3>Upload</h3>
+                    <div class="stat-value" id="upload-avg">-</div>
+                    <div class="stat-details">
+                        <span>Máx: <strong id="upload-max">-</strong></span>
+                        <span>Mín: <strong id="upload-min">-</strong></span>
+                        <span>Mediana: <strong id="upload-median">-</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">📡</div>
+                <div class="stat-content">
+                    <h3>Ping</h3>
+                    <div class="stat-value" id="ping-avg">-</div>
+                    <div class="stat-details">
+                        <span>Máx: <strong id="ping-max">-</strong></span>
+                        <span>Mín: <strong id="ping-min">-</strong></span>
+                        <span>Mediana: <strong id="ping-median">-</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">⏱️</div>
+                <div class="stat-content">
+                    <h3>Tempo Médio</h3>
+                    <div class="stat-value" id="time-avg">-</div>
+                    <div class="stat-details">
+                        <span>Total: <strong id="total-time">-</strong></span>
+                        <span>Máx: <strong id="time-max">-</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estatísticas Avançadas -->
+        <div class="section-title">📊 Estatísticas Avançadas</div>
+        <div class="advanced-stats-grid">
+            <div class="advanced-stat-card">
+                <h4>Download - Análise Detalhada</h4>
+                <div class="stat-row">
+                    <span>Desvio Padrão:</span>
+                    <strong id="download-std">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Q1 (25%):</span>
+                    <strong id="download-q1">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Q3 (75%):</span>
+                    <strong id="download-q3">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>IQR:</span>
+                    <strong id="download-iqr">-</strong>
+                </div>
+            </div>
+
+            <div class="advanced-stat-card">
+                <h4>Upload - Análise Detalhada</h4>
+                <div class="stat-row">
+                    <span>Desvio Padrão:</span>
+                    <strong id="upload-std">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Q1 (25%):</span>
+                    <strong id="upload-q1">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Q3 (75%):</span>
+                    <strong id="upload-q3">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>IQR:</span>
+                    <strong id="upload-iqr">-</strong>
+                </div>
+            </div>
+
+            <div class="advanced-stat-card">
+                <h4>Ping - Análise Detalhada</h4>
+                <div class="stat-row">
+                    <span>Desvio Padrão:</span>
+                    <strong id="ping-std">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Q1 (25%):</span>
+                    <strong id="ping-q1">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Q3 (75%):</span>
+                    <strong id="ping-q3">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>IQR:</span>
+                    <strong id="ping-iqr">-</strong>
+                </div>
+            </div>
+
+            <div class="advanced-stat-card">
+                <h4>Qualidade da Conexão</h4>
+                <div class="stat-row">
+                    <span>Score Geral:</span>
+                    <strong id="quality-score">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Estabilidade:</span>
+                    <strong id="stability">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Testes Consistentes:</span>
+                    <strong id="consistent-tests">-</strong>
+                </div>
+                <div class="stat-row">
+                    <span>Taxa de Sucesso:</span>
+                    <strong id="success-rate">-</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Análises Temporais -->
+        <div class="section-title">🕐 Análises Temporais</div>
+        <div class="charts-container">
+            <div class="chart-wrapper large">
+                <h2>Velocidade de Download ao Longo do Tempo</h2>
+                <canvas id="downloadChart"></canvas>
+            </div>
+
+            <div class="chart-wrapper large">
+                <h2>Velocidade de Upload ao Longo do Tempo</h2>
+                <canvas id="uploadChart"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Latência Ping ao Longo do Tempo</h2>
+                <canvas id="pingChart"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Velocidade Média por Hora do Dia</h2>
+                <canvas id="hourlyChart"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Velocidade Média por Dia da Semana</h2>
+                <canvas id="weekdayChart"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Velocidade Média por Mês</h2>
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Distribuições e Box Plots -->
+        <div class="section-title">📉 Distribuições e Análises</div>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h2>Distribuição de Velocidades</h2>
+                <canvas id="distributionChart"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Box Plot - Download</h2>
+                <canvas id="boxPlotDownload"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Box Plot - Upload</h2>
+                <canvas id="boxPlotUpload"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Box Plot - Ping</h2>
+                <canvas id="boxPlotPing"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Histograma Detalhado - Download</h2>
+                <canvas id="histogramDownload"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Histograma Detalhado - Upload</h2>
+                <canvas id="histogramUpload"></canvas>
+            </div>
+        </div>
+
+        <!-- Correlações e Tendências -->
+        <div class="section-title">🔗 Correlações e Tendências</div>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h2>Correlação Download vs Upload</h2>
+                <canvas id="correlationChart"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Tendência de Download (Média Móvel)</h2>
+                <canvas id="trendDownload"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Tendência de Upload (Média Móvel)</h2>
+                <canvas id="trendUpload"></canvas>
+            </div>
+
+            <div class="chart-wrapper">
+                <h2>Relação Ping vs Velocidade</h2>
+                <canvas id="pingVsSpeed"></canvas>
+            </div>
+        </div>
+
+        <!-- Filtros e Controles -->
+        <div class="section-title">⚙️ Filtros e Controles</div>
+        <div class="filters">
+            <label>
+                <span>Período:</span>
+                <select id="period-filter">
+                    <option value="all">Todos os dados</option>
+                    <option value="7">Últimos 7 dias</option>
+                    <option value="30">Últimos 30 dias</option>
+                    <option value="90">Últimos 90 dias</option>
+                    <option value="180">Últimos 180 dias</option>
+                    <option value="365">Último ano</option>
+                </select>
+            </label>
+            <label>
+                <span>Pontos no gráfico:</span>
+                <select id="data-points">
+                    <option value="all">Todos</option>
+                    <option value="100">100 pontos</option>
+                    <option value="500">500 pontos</option>
+                    <option value="1000">1000 pontos</option>
+                    <option value="2000">2000 pontos</option>
+                </select>
+            </label>
+            <label>
+                <span>Servidor:</span>
+                <select id="server-filter">
+                    <option value="all">Todos os servidores</option>
+                </select>
+            </label>
+            <label>
+                <span>Velocidade Mínima Download:</span>
+                <input type="number" id="min-download" placeholder="Mbps" min="0">
+            </label>
+            <label>
+                <span>Velocidade Mínima Upload:</span>
+                <input type="number" id="min-upload" placeholder="Mbps" min="0">
+            </label>
+        </div>
+
+        <!-- Análise de Percentis Detalhada -->
+        <div class="section-title">📊 Análise de Percentis Detalhada</div>
+        <div class="advanced-stats-grid">
+            <div class="advanced-stat-card">
+                <h4>Download - Percentis</h4>
+                <div class="stat-row"><span>P10:</span><strong id="download-p10">-</strong></div>
+                <div class="stat-row"><span>P25 (Q1):</span><strong id="download-p25">-</strong></div>
+                <div class="stat-row"><span>P50 (Mediana):</span><strong id="download-p50">-</strong></div>
+                <div class="stat-row"><span>P75 (Q3):</span><strong id="download-p75">-</strong></div>
+                <div class="stat-row"><span>P90:</span><strong id="download-p90">-</strong></div>
+                <div class="stat-row"><span>P95:</span><strong id="download-p95">-</strong></div>
+                <div class="stat-row"><span>P99:</span><strong id="download-p99">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Upload - Percentis</h4>
+                <div class="stat-row"><span>P10:</span><strong id="upload-p10">-</strong></div>
+                <div class="stat-row"><span>P25 (Q1):</span><strong id="upload-p25">-</strong></div>
+                <div class="stat-row"><span>P50 (Mediana):</span><strong id="upload-p50">-</strong></div>
+                <div class="stat-row"><span>P75 (Q3):</span><strong id="upload-p75">-</strong></div>
+                <div class="stat-row"><span>P90:</span><strong id="upload-p90">-</strong></div>
+                <div class="stat-row"><span>P95:</span><strong id="upload-p95">-</strong></div>
+                <div class="stat-row"><span>P99:</span><strong id="upload-p99">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Ping - Percentis</h4>
+                <div class="stat-row"><span>P10:</span><strong id="ping-p10">-</strong></div>
+                <div class="stat-row"><span>P25 (Q1):</span><strong id="ping-p25">-</strong></div>
+                <div class="stat-row"><span>P50 (Mediana):</span><strong id="ping-p50">-</strong></div>
+                <div class="stat-row"><span>P75 (Q3):</span><strong id="ping-p75">-</strong></div>
+                <div class="stat-row"><span>P90:</span><strong id="ping-p90">-</strong></div>
+                <div class="stat-row"><span>P95:</span><strong id="ping-p95">-</strong></div>
+                <div class="stat-row"><span>P99:</span><strong id="ping-p99">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Análise de Outliers</h4>
+                <div class="stat-row"><span>Outliers Download:</span><strong id="outliers-download">-</strong></div>
+                <div class="stat-row"><span>Outliers Upload:</span><strong id="outliers-upload">-</strong></div>
+                <div class="stat-row"><span>Outliers Ping:</span><strong id="outliers-ping">-</strong></div>
+                <div class="stat-row"><span>Taxa de Outliers:</span><strong id="outliers-rate">-</strong></div>
+            </div>
+        </div>
+
+        <!-- Heatmap de Performance -->
+        <div class="section-title">🔥 Heatmap de Performance</div>
+        <div class="charts-container">
+            <div class="chart-wrapper large">
+                <h2>Heatmap - Download por Hora e Dia da Semana</h2>
+                <canvas id="heatmapDownload"></canvas>
+            </div>
+            <div class="chart-wrapper large">
+                <h2>Heatmap - Upload por Hora e Dia da Semana</h2>
+                <canvas id="heatmapUpload"></canvas>
+            </div>
+            <div class="chart-wrapper large">
+                <h2>Heatmap - Ping por Hora e Dia da Semana</h2>
+                <canvas id="heatmapPing"></canvas>
+            </div>
+        </div>
+
+        <!-- Análise Comparativa -->
+        <div class="section-title">⚖️ Análise Comparativa</div>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h2>Comparação: Primeira vs Última Metade</h2>
+                <canvas id="comparisonChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Evolução Percentual ao Longo do Tempo</h2>
+                <canvas id="evolutionChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Comparação por Período do Dia</h2>
+                <canvas id="periodComparison"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Gráfico de Radar - Comparação Multidimensional</h2>
+                <canvas id="radarChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Análise por Servidor -->
+        <div class="section-title">🖥️ Análise Detalhada por Servidor</div>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h2>Performance Média por Servidor</h2>
+                <canvas id="serverPerformance"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Distribuição de Testes por Servidor</h2>
+                <canvas id="serverDistribution"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Comparação de Estabilidade por Servidor</h2>
+                <canvas id="serverStability"></canvas>
+            </div>
+        </div>
+
+        <!-- Análise de Degradação e Estabilidade -->
+        <div class="section-title">📉 Análise de Degradação e Estabilidade</div>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h2>Coeficiente de Variação ao Longo do Tempo</h2>
+                <canvas id="coefficientVariation"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Análise de Degradação (Regressão Linear)</h2>
+                <canvas id="degradationChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Índice de Estabilidade Temporal</h2>
+                <canvas id="stabilityIndex"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Análise de Consistência (Desvio Padrão Móvel)</h2>
+                <canvas id="consistencyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Alertas e Avisos -->
+        <div class="section-title">⚠️ Alertas e Avisos</div>
+        <div id="alerts-container" class="alerts-container">
+            <!-- Alertas serão inseridos aqui dinamicamente -->
+        </div>
+
+        <!-- Análise de Picos e Vales -->
+        <div class="section-title">⛰️ Análise de Picos e Vales</div>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h2>Identificação de Picos de Performance</h2>
+                <canvas id="peaksChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Identificação de Vales de Performance</h2>
+                <canvas id="valleysChart"></canvas>
+            </div>
+            <div class="advanced-stat-card" style="grid-column: 1 / -1;">
+                <h4>Estatísticas de Picos e Vales</h4>
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 15px;">
+                    <div><span>Maior Pico Download:</span><strong id="peak-download">-</strong></div>
+                    <div><span>Menor Vale Download:</span><strong id="valley-download">-</strong></div>
+                    <div><span>Maior Pico Upload:</span><strong id="peak-upload">-</strong></div>
+                    <div><span>Menor Vale Upload:</span><strong id="valley-upload">-</strong></div>
+                    <div><span>Maior Pico Ping:</span><strong id="peak-ping">-</strong></div>
+                    <div><span>Menor Vale Ping:</span><strong id="valley-ping">-</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estatísticas por Período do Dia -->
+        <div class="section-title">🌅 Estatísticas por Período do Dia</div>
+        <div class="advanced-stats-grid">
+            <div class="advanced-stat-card">
+                <h4>Madrugada (00h-06h)</h4>
+                <div class="stat-row"><span>Download Médio:</span><strong id="period-download-0">-</strong></div>
+                <div class="stat-row"><span>Upload Médio:</span><strong id="period-upload-0">-</strong></div>
+                <div class="stat-row"><span>Ping Médio:</span><strong id="period-ping-0">-</strong></div>
+                <div class="stat-row"><span>Testes:</span><strong id="period-count-0">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Manhã (06h-12h)</h4>
+                <div class="stat-row"><span>Download Médio:</span><strong id="period-download-1">-</strong></div>
+                <div class="stat-row"><span>Upload Médio:</span><strong id="period-upload-1">-</strong></div>
+                <div class="stat-row"><span>Ping Médio:</span><strong id="period-ping-1">-</strong></div>
+                <div class="stat-row"><span>Testes:</span><strong id="period-count-1">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Tarde (12h-18h)</h4>
+                <div class="stat-row"><span>Download Médio:</span><strong id="period-download-2">-</strong></div>
+                <div class="stat-row"><span>Upload Médio:</span><strong id="period-upload-2">-</strong></div>
+                <div class="stat-row"><span>Ping Médio:</span><strong id="period-ping-2">-</strong></div>
+                <div class="stat-row"><span>Testes:</span><strong id="period-count-2">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Noite (18h-24h)</h4>
+                <div class="stat-row"><span>Download Médio:</span><strong id="period-download-3">-</strong></div>
+                <div class="stat-row"><span>Upload Médio:</span><strong id="period-upload-3">-</strong></div>
+                <div class="stat-row"><span>Ping Médio:</span><strong id="period-ping-3">-</strong></div>
+                <div class="stat-row"><span>Testes:</span><strong id="period-count-3">-</strong></div>
+            </div>
+        </div>
+
+        <!-- Análise de Frequência -->
+        <div class="section-title">📅 Análise de Frequência de Testes</div>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h2>Frequência de Testes por Dia</h2>
+                <canvas id="frequencyChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h2>Intervalo Médio Entre Testes</h2>
+                <canvas id="intervalChart"></canvas>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Estatísticas de Frequência</h4>
+                <div class="stat-row"><span>Testes por Dia (Média):</span><strong id="tests-per-day">-</strong></div>
+                <div class="stat-row"><span>Intervalo Médio:</span><strong id="avg-interval">-</strong></div>
+                <div class="stat-row"><span>Dia com Mais Testes:</span><strong id="max-tests-day">-</strong></div>
+                <div class="stat-row"><span>Dia com Menos Testes:</span><strong id="min-tests-day">-</strong></div>
+            </div>
+        </div>
+
+        <!-- Métricas Avançadas de Qualidade -->
+        <div class="section-title">⭐ Métricas Avançadas de Qualidade</div>
+        <div class="advanced-stats-grid">
+            <div class="advanced-stat-card">
+                <h4>Índices de Qualidade</h4>
+                <div class="stat-row"><span>Índice de Confiabilidade:</span><strong id="reliability-index">-</strong></div>
+                <div class="stat-row"><span>Índice de Consistência:</span><strong id="consistency-index">-</strong></div>
+                <div class="stat-row"><span>Índice de Performance:</span><strong id="performance-index">-</strong></div>
+                <div class="stat-row"><span>Score Geral (0-100):</span><strong id="overall-score">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Análise de Variância</h4>
+                <div class="stat-row"><span>Variância Download:</span><strong id="variance-download">-</strong></div>
+                <div class="stat-row"><span>Variância Upload:</span><strong id="variance-upload">-</strong></div>
+                <div class="stat-row"><span>Variância Ping:</span><strong id="variance-ping">-</strong></div>
+                <div class="stat-row"><span>Coeficiente de Variação:</span><strong id="cv-overall">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Análise de Assimetria</h4>
+                <div class="stat-row"><span>Skewness Download:</span><strong id="skewness-download">-</strong></div>
+                <div class="stat-row"><span>Skewness Upload:</span><strong id="skewness-upload">-</strong></div>
+                <div class="stat-row"><span>Skewness Ping:</span><strong id="skewness-ping">-</strong></div>
+                <div class="stat-row"><span>Distribuição:</span><strong id="distribution-type">-</strong></div>
+            </div>
+            <div class="advanced-stat-card">
+                <h4>Análise de Curtose</h4>
+                <div class="stat-row"><span>Kurtosis Download:</span><strong id="kurtosis-download">-</strong></div>
+                <div class="stat-row"><span>Kurtosis Upload:</span><strong id="kurtosis-upload">-</strong></div>
+                <div class="stat-row"><span>Kurtosis Ping:</span><strong id="kurtosis-ping">-</strong></div>
+                <div class="stat-row"><span>Tipo de Pico:</span><strong id="peak-type">-</strong></div>
+            </div>
+        </div>
+
+        <!-- Tabela de Dados -->
+        <div class="section-title">📋 Tabela de Dados Detalhada</div>
+        <div class="table-container">
+            <div class="table-controls">
+                <input type="text" id="table-search" placeholder="🔍 Buscar na tabela..." class="search-input">
+                <label>
+                    <span>Mostrar:</span>
+                    <select id="table-rows">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="500">500</option>
+                        <option value="all">Todos</option>
+                    </select>
+                </label>
+            </div>
+            <div class="table-wrapper">
+                <table id="data-table">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)">ID ↕️</th>
+                            <th onclick="sortTable(1)">Data/Hora ↕️</th>
+                            <th onclick="sortTable(2)">Download ↕️</th>
+                            <th onclick="sortTable(3)">Upload ↕️</th>
+                            <th onclick="sortTable(4)">Ping ↕️</th>
+                            <th onclick="sortTable(5)">Tempo ↕️</th>
+                            <th onclick="sortTable(6)">Servidor ↕️</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr><td colspan="7">Carregando dados...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="table-info">
+                <span id="table-info-text">Mostrando 0 de 0 registros</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
