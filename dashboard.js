@@ -1182,6 +1182,1223 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}
     URL.revokeObjectURL(url);
 }
 
+// Calcular percentil
+function calculatePercentile(arr, percentile) {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+    return sorted[Math.max(0, index)];
+}
+
+// Detectar outliers usando IQR
+function detectOutliers(arr) {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const q1 = calculatePercentile(sorted, 25);
+    const q3 = calculatePercentile(sorted, 75);
+    const iqr = q3 - q1;
+    const lowerBound = q1 - 1.5 * iqr;
+    const upperBound = q3 + 1.5 * iqr;
+    
+    return arr.filter(val => val < lowerBound || val > upperBound);
+}
+
+// Calcular skewness
+function calculateSkewness(arr, mean, stdDev) {
+    const n = arr.length;
+    const skew = arr.reduce((sum, val) => {
+        return sum + Math.pow((val - mean) / stdDev, 3);
+    }, 0) / n;
+    return skew.toFixed(3);
+}
+
+// Calcular kurtosis
+function calculateKurtosis(arr, mean, stdDev) {
+    const n = arr.length;
+    const kurt = arr.reduce((sum, val) => {
+        return sum + Math.pow((val - mean) / stdDev, 4);
+    }, 0) / n - 3;
+    return kurt.toFixed(3);
+}
+
+// Calcular variância
+function calculateVariance(arr, mean) {
+    return arr.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / arr.length;
+}
+
+// Atualizar percentis na interface
+function updatePercentiles(data) {
+    const downloads = data.map(d => d.download);
+    const uploads = data.map(d => d.upload);
+    const pings = data.map(d => d.ping);
+
+    const percentiles = [10, 25, 50, 75, 90, 95, 99];
+    
+    percentiles.forEach(p => {
+        document.getElementById(`download-p${p}`).textContent = `${calculatePercentile(downloads, p).toFixed(2)} Mbps`;
+        document.getElementById(`upload-p${p}`).textContent = `${calculatePercentile(uploads, p).toFixed(2)} Mbps`;
+        document.getElementById(`ping-p${p}`).textContent = `${calculatePercentile(pings, p).toFixed(2)} ms`;
+    });
+}
+
+// Atualizar análise de outliers
+function updateOutliers(data) {
+    const downloads = data.map(d => d.download);
+    const uploads = data.map(d => d.upload);
+    const pings = data.map(d => d.ping);
+
+    const outliersDownload = detectOutliers(downloads);
+    const outliersUpload = detectOutliers(uploads);
+    const outliersPing = detectOutliers(pings);
+    
+    const totalOutliers = outliersDownload.length + outliersUpload.length + outliersPing.length;
+    const outlierRate = ((totalOutliers / (data.length * 3)) * 100).toFixed(2);
+
+    document.getElementById('outliers-download').textContent = `${outliersDownload.length} (${((outliersDownload.length / data.length) * 100).toFixed(1)}%)`;
+    document.getElementById('outliers-upload').textContent = `${outliersUpload.length} (${((outliersUpload.length / data.length) * 100).toFixed(1)}%)`;
+    document.getElementById('outliers-ping').textContent = `${outliersPing.length} (${((outliersPing.length / data.length) * 100).toFixed(1)}%)`;
+    document.getElementById('outliers-rate').textContent = `${outlierRate}%`;
+}
+
+// Criar heatmap
+function createHeatmap(canvasId, data, dataKey, label) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    if (charts[canvasId]) {
+        charts[canvasId].destroy();
+    }
+
+    const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const heatmapData = {};
+    
+    for (let h = 0; h < 24; h++) {
+        for (let d = 0; d < 7; d++) {
+            heatmapData[`${h}-${d}`] = [];
+        }
+    }
+
+    data.forEach(item => {
+        const date = new Date(item.created);
+        const hour = date.getHours();
+        const weekday = date.getDay();
+        heatmapData[`${hour}-${weekday}`].push(item[dataKey]);
+    });
+
+    const labels = Array.from({ length: 24 }, (_, i) => `${i}h`);
+    const datasets = weekdayNames.map((dayName, dayIndex) => {
+        const dayData = labels.map((_, hour) => {
+            const values = heatmapData[`${hour}-${dayIndex}`];
+            return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        });
+        return {
+            label: dayName,
+            data: dayData,
+            backgroundColor: colors[dataKey] || colors.download
+        };
+    });
+
+    charts[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Criar gráfico comparativo
+function createComparisonChart(data) {
+    const ctx = document.getElementById('comparisonChart').getContext('2d');
+    
+    if (charts.comparisonChart) {
+        charts.comparisonChart.destroy();
+    }
+
+    const mid = Math.floor(data.length / 2);
+    const firstHalf = data.slice(mid);
+    const secondHalf = data.slice(0, mid);
+
+    const calcAvg = (arr, key) => {
+        const values = arr.map(d => d[key]);
+        return values.reduce((a, b) => a + b, 0) / values.length;
+    };
+
+    charts.comparisonChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Primeira Metade', 'Última Metade'],
+            datasets: [
+                {
+                    label: 'Download',
+                    data: [calcAvg(firstHalf, 'download'), calcAvg(secondHalf, 'download')],
+                    backgroundColor: colors.download,
+                    borderColor: colors.border.download,
+                    borderWidth: 1
+                },
+                {
+                    label: 'Upload',
+                    data: [calcAvg(firstHalf, 'upload'), calcAvg(secondHalf, 'upload')],
+                    backgroundColor: colors.upload,
+                    borderColor: colors.border.upload,
+                    borderWidth: 1
+                },
+                {
+                    label: 'Ping',
+                    data: [calcAvg(firstHalf, 'ping'), calcAvg(secondHalf, 'ping')],
+                    backgroundColor: colors.ping,
+                    borderColor: colors.border.ping,
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Criar gráfico de evolução percentual
+function createEvolutionChart(data) {
+    const ctx = document.getElementById('evolutionChart').getContext('2d');
+    
+    if (charts.evolutionChart) {
+        charts.evolutionChart.destroy();
+    }
+
+    const sortedData = [...data].sort((a, b) => new Date(a.created) - new Date(b.created));
+    const windowSize = Math.max(10, Math.floor(sortedData.length / 20));
+    const evolution = [];
+    
+    for (let i = windowSize; i < sortedData.length; i += windowSize) {
+        const window = sortedData.slice(i - windowSize, i);
+        const avgDownload = window.reduce((sum, d) => sum + d.download, 0) / window.length;
+        const avgUpload = window.reduce((sum, d) => sum + d.upload, 0) / window.length;
+        const baselineDownload = sortedData.slice(0, windowSize).reduce((sum, d) => sum + d.download, 0) / windowSize;
+        const baselineUpload = sortedData.slice(0, windowSize).reduce((sum, d) => sum + d.upload, 0) / windowSize;
+        
+        evolution.push({
+            date: new Date(window[window.length - 1].created),
+            downloadChange: ((avgDownload - baselineDownload) / baselineDownload * 100).toFixed(2),
+            uploadChange: ((avgUpload - baselineUpload) / baselineUpload * 100).toFixed(2)
+        });
+    }
+
+    charts.evolutionChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: evolution.map(e => e.date.toLocaleDateString('pt-BR')),
+            datasets: [
+                {
+                    label: 'Mudança Download (%)',
+                    data: evolution.map(e => parseFloat(e.downloadChange)),
+                    borderColor: colors.border.download,
+                    backgroundColor: colors.download,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Mudança Upload (%)',
+                    data: evolution.map(e => parseFloat(e.uploadChange)),
+                    borderColor: colors.border.upload,
+                    backgroundColor: colors.upload,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Mudança Percentual (%)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Criar gráfico de comparação por período do dia
+function createPeriodComparison(data) {
+    const ctx = document.getElementById('periodComparison').getContext('2d');
+    
+    if (charts.periodComparison) {
+        charts.periodComparison.destroy();
+    }
+
+    const periods = [
+        { name: 'Madrugada', start: 0, end: 6 },
+        { name: 'Manhã', start: 6, end: 12 },
+        { name: 'Tarde', start: 12, end: 18 },
+        { name: 'Noite', start: 18, end: 24 }
+    ];
+
+    const periodData = periods.map(period => {
+        const periodTests = data.filter(item => {
+            const hour = new Date(item.created).getHours();
+            return hour >= period.start && hour < period.end;
+        });
+        
+        return {
+            name: period.name,
+            download: periodTests.length > 0 ? periodTests.reduce((sum, d) => sum + d.download, 0) / periodTests.length : 0,
+            upload: periodTests.length > 0 ? periodTests.reduce((sum, d) => sum + d.upload, 0) / periodTests.length : 0,
+            ping: periodTests.length > 0 ? periodTests.reduce((sum, d) => sum + d.ping, 0) / periodTests.length : 0,
+            count: periodTests.length
+        };
+    });
+
+    charts.periodComparison = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: periodData.map(p => p.name),
+            datasets: [
+                {
+                    label: 'Download',
+                    data: periodData.map(p => p.download),
+                    backgroundColor: colors.download,
+                    borderColor: colors.border.download,
+                    borderWidth: 1
+                },
+                {
+                    label: 'Upload',
+                    data: periodData.map(p => p.upload),
+                    backgroundColor: colors.upload,
+                    borderColor: colors.border.upload,
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Criar gráfico de radar
+function createRadarChart(data) {
+    const ctx = document.getElementById('radarChart').getContext('2d');
+    
+    if (charts.radarChart) {
+        charts.radarChart.destroy();
+    }
+
+    const downloads = data.map(d => d.download);
+    const uploads = data.map(d => d.upload);
+    const pings = data.map(d => d.ping);
+    
+    const maxDownload = Math.max(...downloads);
+    const maxUpload = Math.max(...uploads);
+    const maxPing = Math.max(...pings);
+    const avgDownload = downloads.reduce((a, b) => a + b, 0) / downloads.length;
+    const avgUpload = uploads.reduce((a, b) => a + b, 0) / uploads.length;
+    const avgPing = pings.reduce((a, b) => a + b, 0) / pings.length;
+
+    charts.radarChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['Download', 'Upload', 'Ping', 'Estabilidade', 'Consistência'],
+            datasets: [
+                {
+                    label: 'Performance Normalizada',
+                    data: [
+                        (avgDownload / maxDownload) * 100,
+                        (avgUpload / maxUpload) * 100,
+                        100 - ((avgPing / maxPing) * 100),
+                        80,
+                        75
+                    ],
+                    backgroundColor: colors.download.replace('0.8', '0.2'),
+                    borderColor: colors.border.download,
+                    borderWidth: 2,
+                    pointBackgroundColor: colors.border.download,
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: colors.border.download
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Criar gráficos de análise por servidor
+function createServerCharts(data) {
+    const servers = [...new Set(data.map(d => d.serverId))];
+    const serverStats = servers.map(serverId => {
+        const serverData = data.filter(d => d.serverId === serverId);
+        const downloads = serverData.map(d => d.download);
+        const uploads = serverData.map(d => d.upload);
+        const pings = serverData.map(d => d.ping);
+        
+        return {
+            serverId,
+            download: downloads.reduce((a, b) => a + b, 0) / downloads.length,
+            upload: uploads.reduce((a, b) => a + b, 0) / uploads.length,
+            ping: pings.reduce((a, b) => a + b, 0) / pings.length,
+            count: serverData.length,
+            stability: calculateStdDev(downloads, downloads.reduce((a, b) => a + b, 0) / downloads.length)
+        };
+    });
+
+    // Performance por servidor
+    const ctx1 = document.getElementById('serverPerformance').getContext('2d');
+    if (charts.serverPerformance) charts.serverPerformance.destroy();
+    charts.serverPerformance = new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: serverStats.map(s => `Servidor ${s.serverId}`),
+            datasets: [
+                {
+                    label: 'Download',
+                    data: serverStats.map(s => s.download),
+                    backgroundColor: colors.download,
+                    borderColor: colors.border.download,
+                    borderWidth: 1
+                },
+                {
+                    label: 'Upload',
+                    data: serverStats.map(s => s.upload),
+                    backgroundColor: colors.upload,
+                    borderColor: colors.border.upload,
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: true, position: 'top' } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // Distribuição por servidor
+    const ctx2 = document.getElementById('serverDistribution').getContext('2d');
+    if (charts.serverDistribution) charts.serverDistribution.destroy();
+    charts.serverDistribution = new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+            labels: serverStats.map(s => `Servidor ${s.serverId}`),
+            datasets: [{
+                data: serverStats.map(s => s.count),
+                backgroundColor: [
+                    colors.download,
+                    colors.upload,
+                    colors.ping,
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 206, 86, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: true, position: 'right' } }
+        }
+    });
+
+    // Estabilidade por servidor
+    const ctx3 = document.getElementById('serverStability').getContext('2d');
+    if (charts.serverStability) charts.serverStability.destroy();
+    charts.serverStability = new Chart(ctx3, {
+        type: 'bar',
+        data: {
+            labels: serverStats.map(s => `Servidor ${s.serverId}`),
+            datasets: [{
+                label: 'Estabilidade (menor é melhor)',
+                data: serverStats.map(s => s.stability),
+                backgroundColor: colors.ping,
+                borderColor: colors.border.ping,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// Criar gráfico de coeficiente de variação
+function createCoefficientVariationChart(data) {
+    const ctx = document.getElementById('coefficientVariation').getContext('2d');
+    
+    if (charts.coefficientVariation) {
+        charts.coefficientVariation.destroy();
+    }
+
+    const sortedData = [...data].sort((a, b) => new Date(a.created) - new Date(b.created));
+    const windowSize = Math.max(10, Math.floor(sortedData.length / 30));
+    const cvData = [];
+    
+    for (let i = windowSize; i < sortedData.length; i += windowSize) {
+        const window = sortedData.slice(i - windowSize, i);
+        const downloads = window.map(d => d.download);
+        const uploads = window.map(d => d.upload);
+        const meanDownload = downloads.reduce((a, b) => a + b, 0) / downloads.length;
+        const meanUpload = uploads.reduce((a, b) => a + b, 0) / uploads.length;
+        const stdDownload = calculateStdDev(downloads, meanDownload);
+        const stdUpload = calculateStdDev(uploads, meanUpload);
+        
+        cvData.push({
+            date: new Date(window[window.length - 1].created),
+            cvDownload: (stdDownload / meanDownload) * 100,
+            cvUpload: (stdUpload / meanUpload) * 100
+        });
+    }
+
+    charts.coefficientVariation = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: cvData.map(d => d.date.toLocaleDateString('pt-BR')),
+            datasets: [
+                {
+                    label: 'CV Download (%)',
+                    data: cvData.map(d => d.cvDownload.toFixed(2)),
+                    borderColor: colors.border.download,
+                    backgroundColor: colors.download,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'CV Upload (%)',
+                    data: cvData.map(d => d.cvUpload.toFixed(2)),
+                    borderColor: colors.border.upload,
+                    backgroundColor: colors.upload,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: true, position: 'top' } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// Criar gráfico de degradação (regressão linear simples)
+function createDegradationChart(data) {
+    const ctx = document.getElementById('degradationChart').getContext('2d');
+    
+    if (charts.degradationChart) {
+        charts.degradationChart.destroy();
+    }
+
+    const sortedData = [...data].sort((a, b) => new Date(a.created) - new Date(b.created));
+    const x = sortedData.map((_, i) => i);
+    const yDownload = sortedData.map(d => d.download);
+    const yUpload = sortedData.map(d => d.upload);
+    
+    // Regressão linear simples
+    const linearRegression = (x, y) => {
+        const n = x.length;
+        const sumX = x.reduce((a, b) => a + b, 0);
+        const sumY = y.reduce((a, b) => a + b, 0);
+        const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+        const sumXX = x.reduce((sum, xi) => sum + xi * xi, 0);
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+        return { slope, intercept };
+    };
+
+    const regDownload = linearRegression(x, yDownload);
+    const regUpload = linearRegression(x, yUpload);
+    
+    const trendLineDownload = x.map(xi => regDownload.slope * xi + regDownload.intercept);
+    const trendLineUpload = x.map(xi => regUpload.slope * xi + regUpload.intercept);
+
+    charts.degradationChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: sortedData.map(d => new Date(d.created).toLocaleDateString('pt-BR')),
+            datasets: [
+                {
+                    label: 'Download Real',
+                    data: yDownload,
+                    borderColor: colors.download,
+                    backgroundColor: colors.download.replace('0.8', '0.1'),
+                    borderWidth: 1,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Tendência Download',
+                    data: trendLineDownload,
+                    borderColor: colors.border.download,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0
+                },
+                {
+                    label: 'Upload Real',
+                    data: yUpload,
+                    borderColor: colors.upload,
+                    backgroundColor: colors.upload.replace('0.8', '0.1'),
+                    borderWidth: 1,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Tendência Upload',
+                    data: trendLineUpload,
+                    borderColor: colors.border.upload,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: true, position: 'top' } },
+            scales: {
+                y: { beginAtZero: false, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// Criar gráfico de índice de estabilidade
+function createStabilityIndexChart(data) {
+    const ctx = document.getElementById('stabilityIndex').getContext('2d');
+    
+    if (charts.stabilityIndex) {
+        charts.stabilityIndex.destroy();
+    }
+
+    const sortedData = [...data].sort((a, b) => new Date(a.created) - new Date(b.created));
+    const windowSize = Math.max(10, Math.floor(sortedData.length / 20));
+    const stabilityData = [];
+    
+    for (let i = windowSize; i < sortedData.length; i += windowSize) {
+        const window = sortedData.slice(i - windowSize, i);
+        const downloads = window.map(d => d.download);
+        const uploads = window.map(d => d.upload);
+        const meanDownload = downloads.reduce((a, b) => a + b, 0) / downloads.length;
+        const meanUpload = uploads.reduce((a, b) => a + b, 0) / uploads.length;
+        const stdDownload = calculateStdDev(downloads, meanDownload);
+        const stdUpload = calculateStdDev(uploads, meanUpload);
+        
+        // Índice de estabilidade (0-100, maior é melhor)
+        const stability = Math.max(0, 100 - ((stdDownload / meanDownload + stdUpload / meanUpload) * 50));
+        
+        stabilityData.push({
+            date: new Date(window[window.length - 1].created),
+            stability: stability
+        });
+    }
+
+    charts.stabilityIndex = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: stabilityData.map(d => d.date.toLocaleDateString('pt-BR')),
+            datasets: [{
+                label: 'Índice de Estabilidade',
+                data: stabilityData.map(d => d.stability.toFixed(2)),
+                borderColor: colors.border.download,
+                backgroundColor: colors.download,
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, max: 100, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// Criar gráfico de consistência
+function createConsistencyChart(data) {
+    const ctx = document.getElementById('consistencyChart').getContext('2d');
+    
+    if (charts.consistencyChart) {
+        charts.consistencyChart.destroy();
+    }
+
+    const sortedData = [...data].sort((a, b) => new Date(a.created) - new Date(b.created));
+    const windowSize = Math.max(10, Math.floor(sortedData.length / 30));
+    const consistencyData = [];
+    
+    for (let i = windowSize; i < sortedData.length; i += windowSize) {
+        const window = sortedData.slice(i - windowSize, i);
+        const downloads = window.map(d => d.download);
+        const stdDownload = calculateStdDev(downloads, downloads.reduce((a, b) => a + b, 0) / downloads.length);
+        
+        consistencyData.push({
+            date: new Date(window[window.length - 1].created),
+            stdDev: stdDownload
+        });
+    }
+
+    charts.consistencyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: consistencyData.map(d => d.date.toLocaleDateString('pt-BR')),
+            datasets: [{
+                label: 'Desvio Padrão Móvel (Download)',
+                data: consistencyData.map(d => d.stdDev.toFixed(2)),
+                borderColor: colors.border.download,
+                backgroundColor: colors.download,
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// Criar gráficos de picos e vales
+function createPeaksValleysCharts(data) {
+    const sortedData = [...data].sort((a, b) => new Date(a.created) - new Date(b.created));
+    const downloads = sortedData.map(d => d.download);
+    const uploads = sortedData.map(d => d.upload);
+    const pings = sortedData.map(d => d.ping);
+    
+    const meanDownload = downloads.reduce((a, b) => a + b, 0) / downloads.length;
+    const meanUpload = uploads.reduce((a, b) => a + b, 0) / uploads.length;
+    const stdDownload = calculateStdDev(downloads, meanDownload);
+    const stdUpload = calculateStdDev(uploads, meanUpload);
+    
+    const peaks = sortedData.filter((d, i) => d.download > meanDownload + stdDownload);
+    const valleys = sortedData.filter((d, i) => d.download < meanDownload - stdDownload);
+    
+    // Gráfico de picos
+    const ctx1 = document.getElementById('peaksChart').getContext('2d');
+    if (charts.peaksChart) charts.peaksChart.destroy();
+    charts.peaksChart = new Chart(ctx1, {
+        type: 'line',
+        data: {
+            labels: peaks.map(p => new Date(p.created).toLocaleDateString('pt-BR')),
+            datasets: [{
+                label: 'Picos de Performance',
+                data: peaks.map(p => p.download),
+                backgroundColor: 'rgba(76, 175, 80, 0.6)',
+                borderColor: 'rgba(76, 175, 80, 1)',
+                pointRadius: 5,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: false, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 45 } }
+            }
+        }
+    });
+    
+    // Gráfico de vales
+    const ctx2 = document.getElementById('valleysChart').getContext('2d');
+    if (charts.valleysChart) charts.valleysChart.destroy();
+    charts.valleysChart = new Chart(ctx2, {
+        type: 'line',
+        data: {
+            labels: valleys.map(v => new Date(v.created).toLocaleDateString('pt-BR')),
+            datasets: [{
+                label: 'Vales de Performance',
+                data: valleys.map(v => v.download),
+                backgroundColor: 'rgba(244, 67, 54, 0.6)',
+                borderColor: 'rgba(244, 67, 54, 1)',
+                pointRadius: 5,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: false, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 45 } }
+            }
+        }
+    });
+    
+    // Atualizar estatísticas
+    document.getElementById('peak-download').textContent = `${Math.max(...downloads).toFixed(2)} Mbps`;
+    document.getElementById('valley-download').textContent = `${Math.min(...downloads).toFixed(2)} Mbps`;
+    document.getElementById('peak-upload').textContent = `${Math.max(...uploads).toFixed(2)} Mbps`;
+    document.getElementById('valley-upload').textContent = `${Math.min(...uploads).toFixed(2)} Mbps`;
+    document.getElementById('peak-ping').textContent = `${Math.max(...pings).toFixed(2)} ms`;
+    document.getElementById('valley-ping').textContent = `${Math.min(...pings).toFixed(2)} ms`;
+}
+
+// Atualizar estatísticas por período do dia
+function updatePeriodStats(data) {
+    const periods = [
+        { name: 'Madrugada', start: 0, end: 6 },
+        { name: 'Manhã', start: 6, end: 12 },
+        { name: 'Tarde', start: 12, end: 18 },
+        { name: 'Noite', start: 18, end: 24 }
+    ];
+
+    periods.forEach((period, index) => {
+        const periodTests = data.filter(item => {
+            const hour = new Date(item.created).getHours();
+            return hour >= period.start && hour < period.end;
+        });
+        
+        if (periodTests.length > 0) {
+            const avgDownload = periodTests.reduce((sum, d) => sum + d.download, 0) / periodTests.length;
+            const avgUpload = periodTests.reduce((sum, d) => sum + d.upload, 0) / periodTests.length;
+            const avgPing = periodTests.reduce((sum, d) => sum + d.ping, 0) / periodTests.length;
+            
+            document.getElementById(`period-download-${index}`).textContent = `${avgDownload.toFixed(2)} Mbps`;
+            document.getElementById(`period-upload-${index}`).textContent = `${avgUpload.toFixed(2)} Mbps`;
+            document.getElementById(`period-ping-${index}`).textContent = `${avgPing.toFixed(2)} ms`;
+            document.getElementById(`period-count-${index}`).textContent = periodTests.length;
+        } else {
+            document.getElementById(`period-download-${index}`).textContent = 'N/A';
+            document.getElementById(`period-upload-${index}`).textContent = 'N/A';
+            document.getElementById(`period-ping-${index}`).textContent = 'N/A';
+            document.getElementById(`period-count-${index}`).textContent = '0';
+        }
+    });
+}
+
+// Criar gráfico de frequência
+function createFrequencyChart(data) {
+    const ctx = document.getElementById('frequencyChart').getContext('2d');
+    
+    if (charts.frequencyChart) {
+        charts.frequencyChart.destroy();
+    }
+
+    const frequencyByDate = {};
+    data.forEach(item => {
+        const date = new Date(item.created).toLocaleDateString('pt-BR');
+        frequencyByDate[date] = (frequencyByDate[date] || 0) + 1;
+    });
+
+    const sortedDates = Object.keys(frequencyByDate).sort();
+    const frequencies = sortedDates.map(date => frequencyByDate[date]);
+
+    charts.frequencyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sortedDates,
+            datasets: [{
+                label: 'Testes por Dia',
+                data: frequencies,
+                backgroundColor: colors.download,
+                borderColor: colors.border.download,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 45 } }
+            }
+        }
+    });
+    
+    // Estatísticas de frequência
+    const avgPerDay = frequencies.reduce((a, b) => a + b, 0) / frequencies.length;
+    const maxDay = sortedDates[frequencies.indexOf(Math.max(...frequencies))];
+    const minDay = sortedDates[frequencies.indexOf(Math.min(...frequencies))];
+    
+    document.getElementById('tests-per-day').textContent = `${avgPerDay.toFixed(1)}`;
+    document.getElementById('max-tests-day').textContent = maxDay;
+    document.getElementById('min-tests-day').textContent = minDay;
+}
+
+// Criar gráfico de intervalo
+function createIntervalChart(data) {
+    const ctx = document.getElementById('intervalChart').getContext('2d');
+    
+    if (charts.intervalChart) {
+        charts.intervalChart.destroy();
+    }
+
+    const sortedData = [...data].sort((a, b) => new Date(a.created) - new Date(b.created));
+    const intervals = [];
+    
+    for (let i = 1; i < sortedData.length; i++) {
+        const interval = (new Date(sortedData[i].created) - new Date(sortedData[i-1].created)) / (1000 * 60 * 60); // em horas
+        intervals.push(interval);
+    }
+
+    const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    document.getElementById('avg-interval').textContent = `${avgInterval.toFixed(2)} horas`;
+
+    // Criar histograma de intervalos
+    const bucketSize = Math.max(1, Math.ceil((Math.max(...intervals) - Math.min(...intervals)) / 20));
+    const buckets = {};
+    intervals.forEach(interval => {
+        const bucket = Math.floor(interval / bucketSize) * bucketSize;
+        buckets[bucket] = (buckets[bucket] || 0) + 1;
+    });
+
+    charts.intervalChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(buckets).sort((a, b) => a - b).map(k => `${parseFloat(k).toFixed(0)}h`),
+            datasets: [{
+                label: 'Frequência de Intervalos',
+                data: Object.keys(buckets).sort((a, b) => a - b).map(k => buckets[k]),
+                backgroundColor: colors.upload,
+                borderColor: colors.border.upload,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// Atualizar métricas avançadas
+function updateAdvancedMetrics(data) {
+    const downloads = data.map(d => d.download);
+    const uploads = data.map(d => d.upload);
+    const pings = data.map(d => d.ping);
+    
+    const meanDownload = downloads.reduce((a, b) => a + b, 0) / downloads.length;
+    const meanUpload = uploads.reduce((a, b) => a + b, 0) / uploads.length;
+    const meanPing = pings.reduce((a, b) => a + b, 0) / pings.length;
+    
+    const stdDownload = calculateStdDev(downloads, meanDownload);
+    const stdUpload = calculateStdDev(uploads, meanUpload);
+    const stdPing = calculateStdDev(pings, meanPing);
+    
+    // Variâncias
+    const varianceDownload = calculateVariance(downloads, meanDownload);
+    const varianceUpload = calculateVariance(uploads, meanUpload);
+    const variancePing = calculateVariance(pings, meanPing);
+    
+    document.getElementById('variance-download').textContent = varianceDownload.toFixed(2);
+    document.getElementById('variance-upload').textContent = varianceUpload.toFixed(2);
+    document.getElementById('variance-ping').textContent = variancePing.toFixed(2);
+    
+    // Coeficiente de variação
+    const cvDownload = (stdDownload / meanDownload) * 100;
+    const cvUpload = (stdUpload / meanUpload) * 100;
+    const cvOverall = ((cvDownload + cvUpload) / 2).toFixed(2);
+    document.getElementById('cv-overall').textContent = `${cvOverall}%`;
+    
+    // Skewness
+    const skewDownload = calculateSkewness(downloads, meanDownload, stdDownload);
+    const skewUpload = calculateSkewness(uploads, meanUpload, stdUpload);
+    const skewPing = calculateSkewness(pings, meanPing, stdPing);
+    
+    document.getElementById('skewness-download').textContent = skewDownload;
+    document.getElementById('skewness-upload').textContent = skewUpload;
+    document.getElementById('skewness-ping').textContent = skewPing;
+    
+    // Determinar tipo de distribuição
+    const avgSkew = (parseFloat(skewDownload) + parseFloat(skewUpload)) / 2;
+    let distType = 'Normal';
+    if (Math.abs(avgSkew) > 1) distType = 'Muito Assimétrica';
+    else if (Math.abs(avgSkew) > 0.5) distType = 'Moderadamente Assimétrica';
+    document.getElementById('distribution-type').textContent = distType;
+    
+    // Kurtosis
+    const kurtDownload = calculateKurtosis(downloads, meanDownload, stdDownload);
+    const kurtUpload = calculateKurtosis(uploads, meanUpload, stdUpload);
+    const kurtPing = calculateKurtosis(pings, meanPing, stdPing);
+    
+    document.getElementById('kurtosis-download').textContent = kurtDownload;
+    document.getElementById('kurtosis-upload').textContent = kurtUpload;
+    document.getElementById('kurtosis-ping').textContent = kurtPing;
+    
+    // Tipo de pico
+    const avgKurt = (parseFloat(kurtDownload) + parseFloat(kurtUpload)) / 2;
+    let peakType = 'Normal';
+    if (avgKurt > 3) peakType = 'Pico Agudo (Leptocúrtica)';
+    else if (avgKurt < -1) peakType = 'Pico Achatado (Platicúrtica)';
+    document.getElementById('peak-type').textContent = peakType;
+    
+    // Índices de qualidade
+    const reliability = Math.max(0, 100 - cvOverall).toFixed(1);
+    const consistency = Math.max(0, 100 - (stdDownload / meanDownload * 50)).toFixed(1);
+    const performance = ((meanDownload / 500 + meanUpload / 500) * 50).toFixed(1);
+    const overallScore = ((parseFloat(reliability) + parseFloat(consistency) + parseFloat(performance)) / 3).toFixed(1);
+    
+    document.getElementById('reliability-index').textContent = `${reliability}/100`;
+    document.getElementById('consistency-index').textContent = `${consistency}/100`;
+    document.getElementById('performance-index').textContent = `${performance}/100`;
+    document.getElementById('overall-score').textContent = `${overallScore}/100`;
+}
+
+// Gerar alertas
+function generateAlerts(data) {
+    const container = document.getElementById('alerts-container');
+    container.innerHTML = '';
+    
+    const alerts = [];
+    const downloads = data.map(d => d.download);
+    const uploads = data.map(d => d.upload);
+    const pings = data.map(d => d.ping);
+    
+    const meanDownload = downloads.reduce((a, b) => a + b, 0) / downloads.length;
+    const meanUpload = uploads.reduce((a, b) => a + b, 0) / uploads.length;
+    const meanPing = pings.reduce((a, b) => a + b, 0) / pings.length;
+    
+    // Verificar velocidade baixa
+    if (meanDownload < 100) {
+        alerts.push({
+            type: 'warning',
+            icon: '⚠️',
+            title: 'Velocidade de Download Baixa',
+            message: `A velocidade média de download (${meanDownload.toFixed(2)} Mbps) está abaixo do recomendado.`
+        });
+    }
+    
+    if (meanUpload < 50) {
+        alerts.push({
+            type: 'warning',
+            icon: '⚠️',
+            title: 'Velocidade de Upload Baixa',
+            message: `A velocidade média de upload (${meanUpload.toFixed(2)} Mbps) está abaixo do recomendado.`
+        });
+    }
+    
+    // Verificar ping alto
+    if (meanPing > 50) {
+        alerts.push({
+            type: 'error',
+            icon: '🔴',
+            title: 'Latência Alta',
+            message: `O ping médio (${meanPing.toFixed(2)} ms) está acima do ideal para atividades online.`
+        });
+    }
+    
+    // Verificar inconsistência
+    const stdDownload = calculateStdDev(downloads, meanDownload);
+    const cvDownload = (stdDownload / meanDownload) * 100;
+    if (cvDownload > 30) {
+        alerts.push({
+            type: 'warning',
+            icon: '📉',
+            title: 'Alta Variabilidade',
+            message: `A conexão apresenta alta variabilidade (CV: ${cvDownload.toFixed(1)}%). Considere investigar a causa.`
+        });
+    }
+    
+    // Verificar outliers
+    const outliers = detectOutliers(downloads);
+    if (outliers.length > data.length * 0.1) {
+        alerts.push({
+            type: 'info',
+            icon: 'ℹ️',
+            title: 'Muitos Outliers Detectados',
+            message: `${outliers.length} testes apresentaram valores anômalos. Isso pode indicar problemas intermitentes.`
+        });
+    }
+    
+    // Verificar tendência de degradação
+    const sortedData = [...data].sort((a, b) => new Date(a.created) - new Date(b.created));
+    const firstHalf = sortedData.slice(0, Math.floor(sortedData.length / 2));
+    const secondHalf = sortedData.slice(Math.floor(sortedData.length / 2));
+    const avgFirst = firstHalf.reduce((sum, d) => sum + d.download, 0) / firstHalf.length;
+    const avgSecond = secondHalf.reduce((sum, d) => sum + d.download, 0) / secondHalf.length;
+    
+    if (avgSecond < avgFirst * 0.9) {
+        alerts.push({
+            type: 'error',
+            icon: '📉',
+            title: 'Degradação Detectada',
+            message: `A velocidade média diminuiu ${((1 - avgSecond/avgFirst) * 100).toFixed(1)}% comparando a primeira e segunda metade do período.`
+        });
+    }
+    
+    // Exibir alertas
+    if (alerts.length === 0) {
+        alerts.push({
+            type: 'success',
+            icon: '✅',
+            title: 'Tudo em Ordem',
+            message: 'Nenhum problema crítico detectado nos dados analisados.'
+        });
+    }
+    
+    alerts.forEach(alert => {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert-item ${alert.type}`;
+        alertDiv.innerHTML = `
+            <div class="alert-icon">${alert.icon}</div>
+            <div class="alert-content">
+                <div class="alert-title">${alert.title}</div>
+                <div class="alert-message">${alert.message}</div>
+            </div>
+        `;
+        container.appendChild(alertDiv);
+    });
+}
+
+// Atualizar todos os gráficos avançados
+function updateAdvancedCharts(data) {
+    // Heatmaps
+    createHeatmap('heatmapDownload', data, 'download', 'Download');
+    createHeatmap('heatmapUpload', data, 'upload', 'Upload');
+    createHeatmap('heatmapPing', data, 'ping', 'Ping');
+    
+    // Comparações
+    createComparisonChart(data);
+    createEvolutionChart(data);
+    createPeriodComparison(data);
+    createRadarChart(data);
+    
+    // Análise por servidor
+    createServerCharts(data);
+    
+    // Degradação e estabilidade
+    createCoefficientVariationChart(data);
+    createDegradationChart(data);
+    createStabilityIndexChart(data);
+    createConsistencyChart(data);
+    
+    // Picos e vales
+    createPeaksValleysCharts(data);
+    
+    // Frequência
+    createFrequencyChart(data);
+    createIntervalChart(data);
+}
+
 // Atualizar dashboard completo
 function updateDashboard() {
     applyFilters();
@@ -1189,6 +2406,14 @@ function updateDashboard() {
     updateHeaderInfo(filteredData);
     updateCharts(filteredData);
     updateTable(filteredData);
+    
+    // Novas análises avançadas
+    updatePercentiles(filteredData);
+    updateOutliers(filteredData);
+    updatePeriodStats(filteredData);
+    updateAdvancedMetrics(filteredData);
+    generateAlerts(filteredData);
+    updateAdvancedCharts(filteredData);
 }
 
 // Event listeners
